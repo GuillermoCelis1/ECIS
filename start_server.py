@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import subprocess
 import sys
+import os
 import time
 from database import DatabaseManager
 
@@ -9,53 +10,57 @@ def check_dependencies():
     try:
         import flask
         import flask_cors
-        print("✅ Dependencias encontradas")
+        print("✅ Dependencias verificadas")
         return True
     except ImportError as e:
         print(f"❌ Falta dependencia: {e}")
-        print("Instalando dependencias...")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
-            print("✅ Dependencias instaladas")
-            return True
-        except subprocess.CalledProcessError:
-            print("❌ Error instalando dependencias")
-            return False
+        print("Por favor instale las dependencias con:")
+        print("pip install -r requirements.txt")
+        return False
 
 def initialize_database():
     """Inicializar la base de datos"""
     print("🔧 Inicializando base de datos...")
-    try:
-        db = DatabaseManager()
-        print("✅ Base de datos inicializada")
-        return True
-    except Exception as e:
-        print(f"❌ Error inicializando base de datos: {e}")
-        return False
+    db = DatabaseManager()
+    print("✅ Base de datos inicializada")
 
-def start_server():
-    """Iniciar el servidor Flask"""
-    print("🚀 Iniciando servidor Flask...")
+def start_local_server():
+    """Iniciar el servidor Flask local"""
+    print("🔧 Modo Desarrollo Local")
+    print("   Servidor: http://localhost:5000")
+    print("   Presiona Ctrl+C para detener")
+    print("   API disponible en: http://localhost:5000/api")
     try:
-        from app import app
-        app.run(debug=False, host='0.0.0.0', port=5000)
-    except Exception as e:
-        print(f"❌ Error iniciando servidor: {e}")
+        subprocess.run([sys.executable, 'app.py'])
+    except KeyboardInterrupt:
+        print("\n🛑 Servidor local detenido")
+
+def show_deployment_info():
+    """Mostrar información para producción"""
+    print("🚀 Información de Producción")
+    print("   Para producción (Render):")
+    print("   1. Sube el código a tu repositorio")
+    print("   2. Conecta el repositorio a Render")
+    print("   3. Render construirá y desplegará automáticamente")
+    print("   4. La aplicación estará disponible en la URL de Render")
 
 def main():
     print("🎯 Sistema de Seguimiento Educativo - Cundinamarca")
     print("=" * 50)
     
-    # Verificar dependencias
+    # Detectar entorno
+    is_render = os.environ.get('RENDER') is not None
+    is_production = os.environ.get('FLASK_ENV') == 'production'
+    
+    if is_render or is_production:
+        show_deployment_info()
+        return
+    
     if not check_dependencies():
-        return
+        sys.exit(1)
     
-    # Inicializar base de datos
-    if not initialize_database():
-        return
-    
-    # Iniciar servidor
-    start_server()
+    initialize_database()
+    start_local_server()
 
 if __name__ == "__main__":
     main()

@@ -2,10 +2,25 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from database import DatabaseManager
 import json
+import os
 from datetime import datetime
 
 app = Flask(__name__)
-CORS(app)  # Habilitar CORS para todas las rutas
+
+# Detectar si estamos en producción (Render) o desarrollo local
+is_production = os.environ.get('RENDER') is not None
+
+if is_production:
+    # Configuración para producción (Render)
+    CORS(app, 
+         resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}},
+         supports_credentials=True)
+    print("🚀 Modo Producción (Render) - CORS configurado para producción")
+else:
+    # Configuración para desarrollo local
+    CORS(app, resources={r"/*": {"origins": "*"}})
+    print("🔧 Modo Desarrollo Local - CORS configurado para desarrollo")
+
 db = DatabaseManager()
 
 # Servir archivos estáticos (frontend)
@@ -18,7 +33,15 @@ def serve_static(filename):
     return send_from_directory('.', filename)
 
 # API Routes para Provincias
-@app.route('/api/provinces', methods=['GET'])
+@app.route('/api/provinces', methods=['GET', 'POST', 'OPTIONS'])
+def handle_provinces():
+    if request.method == 'GET':
+        return get_provinces()
+    elif request.method == 'POST':
+        return create_province()
+    elif request.method == 'OPTIONS':
+        return '', 200
+
 def get_provinces():
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -27,7 +50,6 @@ def get_provinces():
     conn.close()
     return jsonify(provinces)
 
-@app.route('/api/provinces', methods=['POST'])
 def create_province():
     data = request.get_json()
     conn = db.get_connection()
@@ -40,7 +62,15 @@ def create_province():
     conn.close()
     return jsonify({'id': province_id, 'message': 'Provincia creada exitosamente'}), 201
 
-@app.route('/api/provinces/<int:province_id>', methods=['PUT'])
+@app.route('/api/provinces/<int:province_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
+def handle_province(province_id):
+    if request.method == 'PUT':
+        return update_province(province_id)
+    elif request.method == 'DELETE':
+        return delete_province(province_id)
+    elif request.method == 'OPTIONS':
+        return '', 200
+
 def update_province(province_id):
     data = request.get_json()
     conn = db.get_connection()
@@ -53,7 +83,6 @@ def update_province(province_id):
     conn.close()
     return jsonify({'message': 'Provincia actualizada exitosamente'})
 
-@app.route('/api/provinces/<int:province_id>', methods=['DELETE'])
 def delete_province(province_id):
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -63,7 +92,15 @@ def delete_province(province_id):
     return jsonify({'message': 'Provincia eliminada exitosamente'})
 
 # API Routes para Municipios
-@app.route('/api/municipalities', methods=['GET'])
+@app.route('/api/municipalities', methods=['GET', 'POST', 'OPTIONS'])
+def handle_municipalities():
+    if request.method == 'GET':
+        return get_municipalities()
+    elif request.method == 'POST':
+        return create_municipality()
+    elif request.method == 'OPTIONS':
+        return '', 200
+
 def get_municipalities():
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -78,7 +115,6 @@ def get_municipalities():
     conn.close()
     return jsonify(municipalities)
 
-@app.route('/api/municipalities', methods=['POST'])
 def create_municipality():
     try:
         data = request.get_json()
@@ -104,7 +140,15 @@ def create_municipality():
         print(f"Error creando municipio: {e}")
         return jsonify({'error': str(e)}), 400
 
-@app.route('/api/municipalities/<int:municipality_id>', methods=['PUT'])
+@app.route('/api/municipalities/<int:municipality_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
+def handle_municipality(municipality_id):
+    if request.method == 'PUT':
+        return update_municipality(municipality_id)
+    elif request.method == 'DELETE':
+        return delete_municipality(municipality_id)
+    elif request.method == 'OPTIONS':
+        return '', 200
+
 def update_municipality(municipality_id):
     data = request.get_json()
     conn = db.get_connection()
@@ -118,7 +162,6 @@ def update_municipality(municipality_id):
     conn.close()
     return jsonify({'message': 'Municipio actualizado exitosamente'})
 
-@app.route('/api/municipalities/<int:municipality_id>', methods=['DELETE'])
 def delete_municipality(municipality_id):
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -128,7 +171,15 @@ def delete_municipality(municipality_id):
     return jsonify({'message': 'Municipio eliminado exitosamente'})
 
 # API Routes para Líderes
-@app.route('/api/leaders', methods=['GET'])
+@app.route('/api/leaders', methods=['GET', 'POST', 'OPTIONS'])
+def handle_leaders():
+    if request.method == 'GET':
+        return get_leaders()
+    elif request.method == 'POST':
+        return create_leader()
+    elif request.method == 'OPTIONS':
+        return '', 200
+
 def get_leaders():
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -142,7 +193,6 @@ def get_leaders():
     conn.close()
     return jsonify(leaders)
 
-@app.route('/api/leaders', methods=['POST'])
 def create_leader():
     data = request.get_json()
     conn = db.get_connection()
@@ -163,7 +213,15 @@ def create_leader():
     conn.close()
     return jsonify({'id': leader_id, 'message': 'Líder creado exitosamente'}), 201
 
-@app.route('/api/leaders/<int:leader_id>', methods=['PUT'])
+@app.route('/api/leaders/<int:leader_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
+def handle_leader(leader_id):
+    if request.method == 'PUT':
+        return update_leader(leader_id)
+    elif request.method == 'DELETE':
+        return delete_leader(leader_id)
+    elif request.method == 'OPTIONS':
+        return '', 200
+
 def update_leader(leader_id):
     data = request.get_json()
     conn = db.get_connection()
@@ -177,7 +235,6 @@ def update_leader(leader_id):
     conn.close()
     return jsonify({'message': 'Líder actualizado exitosamente'})
 
-@app.route('/api/leaders/<int:leader_id>', methods=['DELETE'])
 def delete_leader(leader_id):
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -441,5 +498,11 @@ def get_indicators():
     conn.close()
     return jsonify(indicators)
 
-if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    if is_production:
+        # En producción, Render usa Gunicorn, no se ejecuta este bloque
+        pass
+    else:
+        # En desarrollo local, usar Flask development server
+        print(" Iniciando servidor local en http://localhost:5000")
+        app.run(debug=True, host='0.0.0.0', port=5000)
