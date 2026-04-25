@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sqlite3 /d/ECIS/educational_tracking.db \".tables\")",
+      "Bash(sqlite3 /d/ECIS/educational_tracking.db \".schema\")",
+      "Bash(sqlite3 /d/ECIS/educational_tracking.db \"SELECT COUNT\\(*\\) as provinces FROM provinces; SELECT COUNT\\(*\\) as municipalities FROM municipalities; SELECT COUNT\\(*\\) as leaders FROM leaders; SELECT COUNT\\(*\\) as institutions FROM institutions; SELECT COUNT\\(*\\) as weekly_goals FROM weekly_goals;\")",
+      "Bash(python3 -m py_compile app.py database.py start_server.py)",
+      "Bash(/d/ECIS/.venv/Scripts/python.exe -c \"import flask; import flask_cors; import sqlite3; print\\('All imports successful'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(node --check app.js)",
+      "Bash(node --check D:/ECIS/app.js)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('D:/ECIS/app.py'\\).read\\(\\)\\); print\\('app.py OK'\\)\")"
+    ]
+  }
+}

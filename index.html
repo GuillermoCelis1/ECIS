@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Seguimiento Educativo - Cundinamarca</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-building"></i>
+                Sistema Educativo Cundinamarca
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="#" onclick="showSection('dashboard')">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a class="nav-link" href="#" onclick="showSection('provinces')">
+                    <i class="bi bi-geo-alt"></i> Provincias
+                </a>
+                <a class="nav-link" href="#" onclick="showSection('municipalities')">
+                    <i class="bi bi-map"></i> Municipios
+                </a>
+                <a class="nav-link" href="#" onclick="showSection('leaders')">
+                    <i class="bi bi-people"></i> Líderes
+                </a>
+                <a class="nav-link" href="#" onclick="showSection('institutions')">
+                    <i class="bi bi-building"></i> Instituciones
+                </a>
+                <a class="nav-link" href="#" onclick="showSection('indicators')">
+                    <i class="bi bi-graph-up"></i> Indicadores
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Dashboard Section -->
+        <div id="dashboard" class="content-section">
+            <h2 class="mb-4">Dashboard General</h2>
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">Provincias</h5>
+                            <h2 id="totalProvinces">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">Municipios</h5>
+                            <h2 id="totalMunicipalities">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">Líderes</h5>
+                            <h2 id="totalLeaders">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">Instituciones</h5>
+                            <h2 id="totalInstitutions">0</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Cumplimiento por Líder</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="leaderFulfillmentChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Cumplimiento por Provincia</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="provinceFulfillmentChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de Metas Semanales en Dashboard -->
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Seguimiento de Metas Semanales por Líder</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Filtrar por Líder:</label>
+                                    <select class="form-select" id="dashFilterLeader" onchange="loadDashboardWeeklyGoalsTable()">
+                                        <option value="">Todos los líderes</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Fecha Inicio:</label>
+                                    <input type="date" class="form-control" id="dashDateStart" onchange="loadDashboardWeeklyGoalsTable()">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Fecha Fin:</label>
+                                    <input type="date" class="form-control" id="dashDateEnd" onchange="loadDashboardWeeklyGoalsTable()">
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-striped table-sm" id="dashWeeklyGoalsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Líder</th>
+                                            <th>Fecha Inicio</th>
+                                            <th>Fecha Fin</th>
+                                            <th>EE Visitadas</th>
+                                            <th>Sedes Visitadas</th>
+                                            <th>Rep. de Estándares</th>
+                                            <th>Rep. Salud</th>
+                                            <th>Análisis Vuln.</th>
+                                            <th>Matrices Riesgo</th>
+                                            <th>Diag. Salud</th>
+                                            <th>Planes Cuidado</th>
+                                            <th>Inv. ATEL</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dashWeeklyGoalsTableBody">
+                                        <tr><td colspan="13" class="text-center text-muted">Cargando...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Provinces Section -->
+        <div id="provinces" class="content-section" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Gestión de Provincias</h2>
+                <button class="btn btn-primary" onclick="showProvinceModal()">
+                    <i class="bi bi-plus-circle"></i> Nueva Provincia
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped" id="provincesTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre</th>
+                            <th>Municipios</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="provincesTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Municipalities Section -->
+        <div id="municipalities" class="content-section" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Gestión de Municipios</h2>
+                <button class="btn btn-primary" onclick="showMunicipalityModal()">
+                    <i class="bi bi-plus-circle"></i> Nuevo Municipio
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped" id="municipalitiesTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre</th>
+                            <th>Provincia</th>
+                            <th>Líder</th>
+                            <th>Instituciones</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="municipalitiesTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Leaders Section -->
+        <div id="leaders" class="content-section" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Gestión de Líderes</h2>
+                <button class="btn btn-primary" onclick="showLeaderModal()">
+                    <i class="bi bi-plus-circle"></i> Nuevo Líder
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped" id="leadersTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre</th>
+                            <th>Contacto</th>
+                            <th>Municipio</th>
+                            <th>Instituciones</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leadersTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Institutions Section -->
+        <div id="institutions" class="content-section" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Gestión de Instituciones Educativas</h2>
+                <button class="btn btn-primary" onclick="showInstitutionModal()">
+                    <i class="bi bi-plus-circle"></i> Nueva Institución
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped" id="institutionsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre</th>
+                            <th>Líder</th>
+                            <th>Sedes Urbanas</th>
+                            <th>Sedes Rurales</th>
+                            <th>Docentes</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="institutionsTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Indicators Section -->
+        <div id="indicators" class="content-section" style="display: none;">
+            <h2 class="mb-4">Indicadores Educativos</h2>
+            
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <label for="filterProvince" class="form-label">Filtrar por Provincia:</label>
+                    <select class="form-select" id="filterProvince" onchange="updateIndicators()">
+                        <option value="">Todas las provincias</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filterMunicipality" class="form-label">Filtrar por Municipio:</label>
+                    <select class="form-select" id="filterMunicipality" onchange="updateIndicators()">
+                        <option value="">Todos los municipios</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filterLeader" class="form-label">Filtrar por Líder:</label>
+                    <select class="form-select" id="filterLeader" onchange="updateIndicators()">
+                        <option value="">Todos los líderes</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="indDateStart" class="form-label">Fecha Inicio:</label>
+                    <input type="date" class="form-control" id="indDateStart" onchange="updateIndicators()">
+                </div>
+                <div class="col-md-3">
+                    <label for="indDateEnd" class="form-label">Fecha Fin:</label>
+                    <input type="date" class="form-control" id="indDateEnd" onchange="updateIndicators()">
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5>Gestión de Metas Semanales por Líder</h5>
+                            <button class="btn btn-primary" onclick="showWeeklyGoalModal()">
+                                <i class="bi bi-plus-circle"></i> Nueva Meta Semanal
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped" id="weeklyGoalsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Líder</th>
+                                            <th>Fecha Inicio</th>
+                                            <th>Fecha Fin</th>
+                                            <th>EE Visitadas (Meta/Real)</th>
+                                            <th>Sedes Visitadas (Meta/Real)</th>
+                                            <th>Reportes de Estándares (Meta/Real)</th>
+                                            <th>Reportes Salud (Meta/Real)</th>
+                                            <th>Análisis Vulnerabilidad (Meta/Real)</th>
+                                            <th>Matrices Riesgo (Meta/Real)</th>
+                                            <th>Diagnóstico Salud (Meta/Real)</th>
+                                            <th>Planes Cuidado (Meta/Real)</th>
+                                            <th>Investigaciones ATEL (Meta/Real)</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="weeklyGoalsTableBody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Indicadores de Seguimiento</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="indicatorsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modal for Province -->
+    <div class="modal fade" id="provinceModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva Provincia</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="provinceForm">
+                        <div class="mb-3">
+                            <label for="provinceName" class="form-label">Nombre de la Provincia</label>
+                            <input type="text" class="form-control" id="provinceName" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveProvince()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Municipality -->
+    <div class="modal fade" id="municipalityModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo Municipio</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="municipalityForm">
+                        <div class="mb-3">
+                            <label for="municipalityName" class="form-label">Nombre del Municipio</label>
+                            <input type="text" class="form-control" id="municipalityName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="municipalityProvince" class="form-label">Provincia</label>
+                            <select class="form-select" id="municipalityProvince" required>
+                                <option value="">Seleccione una provincia</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveMunicipality()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Leader -->
+    <div class="modal fade" id="leaderModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo Líder</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="leaderForm">
+                        <div class="mb-3">
+                            <label for="leaderName" class="form-label">Nombre del Líder</label>
+                            <input type="text" class="form-control" id="leaderName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="leaderContact" class="form-label">Contacto</label>
+                            <input type="text" class="form-control" id="leaderContact" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="leaderMunicipality" class="form-label">Municipio</label>
+                            <select class="form-select" id="leaderMunicipality" required>
+                                <option value="">Seleccione un municipio</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveLeader()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Institution -->
+    <div class="modal fade" id="institutionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva Institución Educativa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="institutionForm">
+                        <div class="mb-3">
+                            <label for="institutionName" class="form-label">Nombre de la Institución</label>
+                            <input type="text" class="form-control" id="institutionName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="institutionLeader" class="form-label">Líder Asignado</label>
+                            <select class="form-select" id="institutionLeader" required>
+                                <option value="">Seleccione un líder</option>
+                            </select>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="urbanSedes" class="form-label">Sedes Urbanas</label>
+                                    <input type="number" class="form-control" id="urbanSedes" min="0" value="0">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="ruralSedes" class="form-label">Sedes Rurales</label>
+                                    <input type="number" class="form-control" id="ruralSedes" min="0" value="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="teacherCount" class="form-label">Cantidad de Docentes</label>
+                            <input type="number" class="form-control" id="teacherCount" min="0" value="0">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveInstitution()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Weekly Goals -->
+    <div class="modal fade" id="weeklyGoalModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Meta Semanal por Líder</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="weeklyGoalForm">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="goalLeader" class="form-label">Líder</label>
+                                <select class="form-select" id="goalLeader" required>
+                                    <option value="">Seleccione un líder</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="goalDateStart" class="form-label">Fecha Inicio</label>
+                                <input type="date" class="form-control" id="goalDateStart" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="goalDateEnd" class="form-label">Fecha Fin</label>
+                                <input type="date" class="form-control" id="goalDateEnd" required>
+                            </div>
+                        </div>
+
+                        <h6 class="mt-4 mb-3">Metas por Indicador</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="goalEeVisitadas" class="form-label">EE Visitadas (Meta)</label>
+                                    <input type="number" class="form-control" id="goalEeVisitadas" min="0" value="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="actualEeVisitadas" class="form-label">EE Visitadas (Real)</label>
+                                    <input type="number" class="form-control" id="actualEeVisitadas" min="0" value="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="goalSedesVisitadas" class="form-label">Sedes Visitadas (Meta)</label>
+                                    <input type="number" class="form-control" id="goalSedesVisitadas" min="0" value="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="actualSedesVisitadas" class="form-label">Sedes Visitadas (Real)</label>
+                                    <input type="number" class="form-control" id="actualSedesVisitadas" min="0" value="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="goalReportesEstanteria" class="form-label">Reportes de Estándares (Meta)</label>
+                                    <input type="number" class="form-control" id="goalReportesEstanteria" min="0" value="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="actualReportesEstanteria" class="form-label">Reportes de Estándares (Real)</label>
+                                    <input type="number" class="form-control" id="actualReportesEstanteria" min="0" value="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="goalReportesSalud" class="form-label">Reportes Salud (Meta)</label>
+                                    <input type="number" class="form-control" id="goalReportesSalud" min="0" value="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="actualReportesSalud" class="form-label">Reportes Salud (Real)</label>
+                                    <input type="number" class="form-control" id="actualReportesSalud" min="0" value="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="goalAnalisisVulnerabilidad" class="form-label">Análisis Vulnerabilidad (Meta)</label>
+                                    <input type="number" class="form-control" id="goalAnalisisVulnerabilidad" min="0" value="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="actualAnalisisVulnerabilidad" class="form-label">Análisis Vulnerabilidad (Real)</label>
+                                    <input type="number" class="form-control" id="actualAnalisisVulnerabilidad" min="0" value="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="goalMatricesRiesgo" class="form-label">Matrices Riesgo (Meta)</label>
+                                    <input type="number" class="form-control" id="goalMatricesRiesgo" min="0" value="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="actualMatricesRiesgo" class="form-label">Matrices Riesgo (Real)</label>
+                                    <input type="number" class="form-control" id="actualMatricesRiesgo" min="0" value="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="goalDiagnosticoSalud" class="form-label">Diagnóstico Salud (Meta)</label>
+                                    <input type="number" class="form-control" id="goalDiagnosticoSalud" min="0" value="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="actualDiagnosticoSalud" class="form-label">Diagnóstico Salud (Real)</label>
+                                    <input type="number" class="form-control" id="actualDiagnosticoSalud" min="0" value="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="goalPlanesCuidado" class="form-label">Planes Cuidado (Meta)</label>
+                                    <input type="number" class="form-control" id="goalPlanesCuidado" min="0" value="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="actualPlanesCuidado" class="form-label">Planes Cuidado (Real)</label>
+                                    <input type="number" class="form-control" id="actualPlanesCuidado" min="0" value="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="goalInvestigacionesAtel" class="form-label">Investigaciones ATEL (Meta)</label>
+                                    <input type="number" class="form-control" id="goalInvestigacionesAtel" min="0" value="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="actualInvestigacionesAtel" class="form-label">Investigaciones ATEL (Real)</label>
+                                    <input type="number" class="form-control" id="actualInvestigacionesAtel" min="0" value="0">
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveWeeklyGoal()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
