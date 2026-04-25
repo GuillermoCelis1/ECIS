@@ -9,7 +9,9 @@
       "Bash(python -c ' *)",
       "Bash(node --check app.js)",
       "Bash(node --check D:/ECIS/app.js)",
-      "Bash(python -c \"import ast; ast.parse\\(open\\('D:/ECIS/app.py'\\).read\\(\\)\\); print\\('app.py OK'\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\('D:/ECIS/app.py'\\).read\\(\\)\\); print\\('app.py OK'\\)\")",
+      "Bash(Get-Content \"D:\\\\ECIS\\\\index.html\")",
+      "Bash(Measure-Object -Line)"
     ]
   }
 }

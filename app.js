@@ -19,9 +19,28 @@ function weekToEndDate(week, month, year) {
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+// Semana Jueves → Miércoles
+// Devuelve el jueves que inicia la semana actual (o el mismo día si es jueves)
+function getWeekStartThursday(date = new Date()) {
+    const d = new Date(date);
+    const daysToThursday = (d.getDay() + 3) % 7; // Thu=0, Fri=1, …, Wed=6
+    d.setDate(d.getDate() - daysToThursday);
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+// Devuelve el miércoles que cierra esa semana (jueves + 6 días)
+function getWeekEndWednesday(thursday) {
+    const d = new Date(thursday);
+    d.setDate(d.getDate() + 6);
+    return d;
+}
+// Formatea Date → "YYYY-MM-DD"
+const fmtDate = d => d.toISOString().slice(0, 10);
+
 // Clase para manejar la comunicación con la API REST
 class APIManager {
-    constructor(baseURL = 'https://ecis.onrender.com/api') {
+    constructor(baseURL = '/api') {
+        // Usar ruta relativa para que funcione tanto en local como en Render
         this.baseURL = baseURL;
     }
 
@@ -56,11 +75,7 @@ class APIManager {
 
     // Provincias
     async getProvinces() {
-        const result = await this.request('/provinces');
-        console.log('APIManager.getProvinces - Resultado crudo:', result);
-        console.log('APIManager.getProvinces - ¿Es array?', Array.isArray(result));
-        console.log('APIManager.getProvinces - Tipo:', typeof result);
-        return result;
+        return this.request('/provinces');
     }
 
     async createProvince(province) {
@@ -181,18 +196,9 @@ async function showMunicipalityModal() {
     document.getElementById('municipalityForm').reset();
     
     try {
-        // Cargar provincias en el select
         const provinces = await app.db.getProvinces();
-        console.log('Provincias cargadas:', provinces);
-        console.log('Tipo de provincias:', typeof provinces);
-        console.log('¿Es array?', Array.isArray(provinces));
-        
-        // Validar que sea un array
-        if (!Array.isArray(provinces)) {
-            console.error('Expected array but got:', typeof provinces, provinces);
-            throw new Error('La API no devolvió un array de provincias');
-        }
-        
+        if (!Array.isArray(provinces)) throw new Error('La API no devolvió un array de provincias');
+
         const select = document.getElementById('municipalityProvince');
         select.innerHTML = '<option value="">Seleccione una provincia</option>' +
             provinces.map(province => 
@@ -247,37 +253,18 @@ async function showInstitutionModal() {
 }
 
 async function saveProvince() {
-    console.log('saveProvince - Iniciando función');
-    
     const name = document.getElementById('provinceName').value.trim();
-    console.log('saveProvince - Nombre:', name);
-    
-    if (!name) {
-        alert('Por favor ingrese el nombre de la provincia');
-        return;
-    }
+    if (!name) { alert('Por favor ingrese el nombre de la provincia'); return; }
 
     try {
-        console.log('saveProvince - Intentando agregar provincia:', { name });
-        const result = await app.db.addProvince({ name });
-        console.log('saveProvince - Resultado de addProvince:', result);
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('provinceModal'));
-        if (modal) {
-            modal.hide();
-        }
-        
-        console.log('saveProvince - Cargando tablas...');
+        await app.db.addProvince({ name });
+        bootstrap.Modal.getInstance(document.getElementById('provinceModal'))?.hide();
         await app.loadTables();
-        console.log('saveProvince - Actualizando dashboard...');
         await app.updateDashboard();
-        console.log('saveProvince - Actualizando filtros...');
         app.updateFilters();
-        
         alert('Provincia guardada exitosamente');
     } catch (error) {
         console.error('Error guardando provincia:', error);
-        console.error('Error details:', error.message, error.stack);
         alert('Error al guardar provincia: ' + error.message);
     }
 }
@@ -429,25 +416,16 @@ async function updateProvince(id) {
 }
 
 async function deleteProvince(id) {
-    console.log('Intentando eliminar provincia con ID:', id);
-    
-    if (confirm('¿Está seguro de eliminar esta provincia? Esta acción no se puede deshacer.')) {
-        try {
-            console.log('Usuario confirmó eliminación');
-            const result = await app.db.deleteProvince(id);
-            console.log('Resultado de eliminación:', result);
-            
-            await app.loadTables();
-            await app.updateDashboard();
-            app.updateFilters();
-            
-            alert('Provincia eliminada exitosamente');
-        } catch (error) {
-            console.error('Error eliminando provincia:', error);
-            alert('Error al eliminar provincia: ' + error.message);
-        }
-    } else {
-        console.log('Usuario canceló eliminación');
+    if (!confirm('¿Está seguro de eliminar esta provincia? Esta acción no se puede deshacer.')) return;
+    try {
+        await app.db.deleteProvince(id);
+        await app.loadTables();
+        await app.updateDashboard();
+        app.updateFilters();
+        alert('Provincia eliminada exitosamente');
+    } catch (error) {
+        console.error('Error eliminando provincia:', error);
+        alert('Error al eliminar provincia: ' + error.message);
     }
 }
 
@@ -493,14 +471,17 @@ async function editMunicipality(id) {
 async function updateMunicipality(id) {
     const name = document.getElementById('municipalityName').value.trim();
     const provinceId = parseInt(document.getElementById('municipalityProvince').value);
-    
+
     if (!name || !provinceId) {
         alert('Por favor complete todos los campos');
         return;
     }
 
     try {
-        await app.db.updateMunicipality(id, { name, province_id: provinceId, leader_id: null });
+        // Preservar el leader_id existente; no sobrescribirlo con null
+        const existing = app.db.cache.municipalities.find(m => m.id === id);
+        const leader_id = existing ? existing.leader_id : null;
+        await app.db.updateMunicipality(id, { name, province_id: provinceId, leader_id });
         
         bootstrap.Modal.getInstance(document.getElementById('municipalityModal')).hide();
         await app.loadTables();
@@ -522,25 +503,16 @@ async function updateMunicipality(id) {
 }
 
 async function deleteMunicipality(id) {
-    console.log('Intentando eliminar municipio con ID:', id);
-    
-    if (confirm('¿Está seguro de eliminar este municipio? Esta acción no se puede deshacer.')) {
-        try {
-            console.log('Usuario confirmó eliminación de municipio');
-            const result = await app.db.deleteMunicipality(id);
-            console.log('Resultado de eliminación de municipio:', result);
-            
-            await app.loadTables();
-            await app.updateDashboard();
-            app.updateFilters();
-            
-            alert('Municipio eliminado exitosamente');
-        } catch (error) {
-            console.error('Error eliminando municipio:', error);
-            alert('Error al eliminar municipio: ' + error.message);
-        }
-    } else {
-        console.log('Usuario canceló eliminación de municipio');
+    if (!confirm('¿Está seguro de eliminar este municipio? Esta acción no se puede deshacer.')) return;
+    try {
+        await app.db.deleteMunicipality(id);
+        await app.loadTables();
+        await app.updateDashboard();
+        app.updateFilters();
+        alert('Municipio eliminado exitosamente');
+    } catch (error) {
+        console.error('Error eliminando municipio:', error);
+        alert('Error al eliminar municipio: ' + error.message);
     }
 }
 
@@ -617,25 +589,16 @@ async function updateLeader(id) {
 }
 
 async function deleteLeader(id) {
-    console.log('Intentando eliminar líder con ID:', id);
-    
-    if (confirm('¿Está seguro de eliminar este líder? Esta acción no se puede deshacer.')) {
-        try {
-            console.log('Usuario confirmó eliminación de líder');
-            const result = await app.db.deleteLeader(id);
-            console.log('Resultado de eliminación de líder:', result);
-            
-            await app.loadTables();
-            await app.updateDashboard();
-            app.updateFilters();
-            
-            alert('Líder eliminado exitosamente');
-        } catch (error) {
-            console.error('Error eliminando líder:', error);
-            alert('Error al eliminar líder: ' + error.message);
-        }
-    } else {
-        console.log('Usuario canceló eliminación de líder');
+    if (!confirm('¿Está seguro de eliminar este líder? Esta acción no se puede deshacer.')) return;
+    try {
+        await app.db.deleteLeader(id);
+        await app.loadTables();
+        await app.updateDashboard();
+        app.updateFilters();
+        alert('Líder eliminado exitosamente');
+    } catch (error) {
+        console.error('Error eliminando líder:', error);
+        alert('Error al eliminar líder: ' + error.message);
     }
 }
 
@@ -722,25 +685,16 @@ async function updateInstitution(id) {
 }
 
 async function deleteInstitution(id) {
-    console.log('Intentando eliminar institución con ID:', id);
-    
-    if (confirm('¿Está seguro de eliminar esta institución? Esta acción no se puede deshacer.')) {
-        try {
-            console.log('Usuario confirmó eliminación de institución');
-            const result = await app.db.deleteInstitution(id);
-            console.log('Resultado de eliminación de institución:', result);
-            
-            await app.loadTables();
-            await app.updateDashboard();
-            app.updateFilters();
-            
-            alert('Institución eliminada exitosamente');
-        } catch (error) {
-            console.error('Error eliminando institución:', error);
-            alert('Error al eliminar institución: ' + error.message);
-        }
-    } else {
-        console.log('Usuario canceló eliminación de institución');
+    if (!confirm('¿Está seguro de eliminar esta institución? Esta acción no se puede deshacer.')) return;
+    try {
+        await app.db.deleteInstitution(id);
+        await app.loadTables();
+        await app.updateDashboard();
+        app.updateFilters();
+        alert('Institución eliminada exitosamente');
+    } catch (error) {
+        console.error('Error eliminando institución:', error);
+        alert('Error al eliminar institución: ' + error.message);
     }
 }
 
@@ -857,34 +811,18 @@ async function updateWeeklyGoal(goalId) {
 }
 
 async function deleteWeeklyGoal(leaderId, week, month, year) {
-    console.log('Intentando eliminar meta semanal - Leader:', leaderId, 'Week:', week, 'Month:', month, 'Year:', year);
-    
-    if (confirm('¿Está seguro de eliminar esta meta semanal? Esta acción no se puede deshacer.')) {
-        try {
-            console.log('Usuario confirmó eliminación de meta semanal');
-            
-            // Obtener el ID del goal para eliminar
-            const goal = await app.db.getWeeklyGoal(leaderId, week, month, year);
-            if (!goal) {
-                console.log('Meta semanal no encontrada para los parámetros proporcionados');
-                alert('Meta semanal no encontrada');
-                return;
-            }
-            
-            console.log('Meta semanal encontrada con ID:', goal.id);
-            const result = await app.db.deleteWeeklyGoal(goal.id);
-            console.log('Resultado de eliminación de meta semanal:', result);
-            
-            await app.loadWeeklyGoalsTable();
-            await app.updateIndicators();
-            
-            alert('Meta semanal eliminada exitosamente');
-        } catch (error) {
-            console.error('Error eliminando meta semanal:', error);
-            alert('Error al eliminar meta semanal: ' + error.message);
-        }
-    } else {
-        console.log('Usuario canceló eliminación de meta semanal');
+    if (!confirm('¿Está seguro de eliminar esta meta semanal? Esta acción no se puede deshacer.')) return;
+    try {
+        const goal = await app.db.getWeeklyGoal(leaderId, week, month, year);
+        if (!goal) { alert('Meta semanal no encontrada'); return; }
+
+        await app.db.deleteWeeklyGoal(goal.id);
+        await app.loadWeeklyGoalsTable();
+        await app.updateIndicators();
+        alert('Meta semanal eliminada exitosamente');
+    } catch (error) {
+        console.error('Error eliminando meta semanal:', error);
+        alert('Error al eliminar meta semanal: ' + error.message);
     }
 }
 
@@ -892,12 +830,11 @@ async function showWeeklyGoalModal() {
     const modal = new bootstrap.Modal(document.getElementById('weeklyGoalModal'));
     document.getElementById('weeklyGoalForm').reset();
 
-    // Fecha de inicio = hoy, fecha fin = hoy + 6 días (una semana)
-    const today = new Date();
-    const end   = new Date(today); end.setDate(end.getDate() + 6);
-    const fmt   = d => d.toISOString().slice(0, 10);
-    document.getElementById('goalDateStart').value = fmt(today);
-    document.getElementById('goalDateEnd').value   = fmt(end);
+    // Fecha de inicio = jueves de esta semana, fecha fin = miércoles siguiente
+    const thursday  = getWeekStartThursday(new Date());
+    const wednesday = getWeekEndWednesday(thursday);
+    document.getElementById('goalDateStart').value = fmtDate(thursday);
+    document.getElementById('goalDateEnd').value   = fmtDate(wednesday);
 
     try {
         const leaders = await app.db.getLeaders();
@@ -990,14 +927,10 @@ class Database {
     // Métodos asíncronos para obtener datos
     async getProvinces() {
         try {
-            const apiResult = await this.api.getProvinces();
-            console.log('Database.getProvinces - Resultado de API:', apiResult);
-            console.log('Database.getProvinces - ¿Es array?', Array.isArray(apiResult));
-            this.cache.provinces = apiResult;
-            console.log('Database.getProvinces - Cache actualizado:', this.cache.provinces);
+            this.cache.provinces = await this.api.getProvinces();
             return this.cache.provinces;
         } catch (error) {
-            console.error('Database.getProvinces - Error obteniendo provincias:', error);
+            console.error('Error obteniendo provincias:', error);
             return [];
         }
     }
@@ -1060,15 +993,11 @@ class Database {
     // Métodos para agregar datos
     async addProvince(province) {
         try {
-            console.log('Database.addProvince - Datos recibidos:', province);
             const result = await this.api.createProvince(province);
-            console.log('Database.addProvince - Resultado de API:', result);
             await this.getProvinces(); // Refrescar caché
-            console.log('Database.addProvince - Cache refrescado');
             return result.id;
         } catch (error) {
-            console.error('Database.addProvince - Error agregando provincia:', error);
-            console.error('Database.addProvince - Error details:', error.message, error.stack);
+            console.error('Error agregando provincia:', error);
             throw error;
         }
     }
@@ -1087,7 +1016,8 @@ class Database {
     async addLeader(leader) {
         try {
             const result = await this.api.createLeader(leader);
-            await this.getLeaders(); // Refrescar caché
+            // Refrescar líderes Y municipios (el municipio recibe leader_id)
+            await Promise.all([this.getLeaders(), this.getMunicipalities()]);
             return result.id;
         } catch (error) {
             console.error('Error agregando líder:', error);
@@ -1130,7 +1060,7 @@ class Database {
     async updateLeader(id, leader) {
         try {
             await this.api.updateLeader(id, leader);
-            await this.getLeaders(); // Refrescar caché
+            await Promise.all([this.getLeaders(), this.getMunicipalities()]);
         } catch (error) {
             console.error('Error actualizando líder:', error);
             throw error;
@@ -1181,7 +1111,7 @@ class Database {
     async deleteLeader(id) {
         try {
             await this.api.deleteLeader(id);
-            await this.getLeaders(); // Refrescar caché
+            await Promise.all([this.getLeaders(), this.getMunicipalities()]);
         } catch (error) {
             console.error('Error eliminando líder:', error);
             throw error;
@@ -1303,13 +1233,14 @@ class Database {
         }
     }
 
-    // Método para refrescar toda la caché
+    // Método para refrescar toda la caché (5 llamadas en paralelo)
     async refreshCache() {
         await Promise.all([
             this.getProvinces(),
             this.getMunicipalities(),
             this.getLeaders(),
-            this.getInstitutions()
+            this.getInstitutions(),
+            this.getWeeklyGoals()
         ]);
     }
 }
@@ -1456,6 +1387,168 @@ class ChartManager {
         });
     }
 
+    createMunicipalityFulfillmentChart(data) {
+        // data = [{name, pct}]
+        const ctx = document.getElementById('municipalityFulfillmentChart').getContext('2d');
+        if (this.charts.municipalityFulfillment) this.charts.municipalityFulfillment.destroy();
+
+        if (!data.length) {
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#6c757d';
+            ctx.fillText('Sin datos de metas semanales', ctx.canvas.width / 2, 60);
+            return;
+        }
+
+        this.charts.municipalityFulfillment = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.map(d => d.name),
+                datasets: [{
+                    label: '% Cumplimiento',
+                    data: data.map(d => d.pct),
+                    backgroundColor: data.map(d => this._fulfillmentColor(d.pct)),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.x}%` } }
+                },
+                scales: {
+                    x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
+                }
+            }
+        });
+    }
+
+    createActivityFulfillmentChart(data) {
+        // data = [{label, pct, goal, actual}]
+        const ctx = document.getElementById('activityFulfillmentChart').getContext('2d');
+        if (this.charts.activityFulfillment) this.charts.activityFulfillment.destroy();
+
+        if (!data.some(d => d.goal > 0)) {
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#6c757d';
+            ctx.fillText('Sin datos de metas semanales', ctx.canvas.width / 2, 60);
+            return;
+        }
+
+        this.charts.activityFulfillment = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.map(d => d.label),
+                datasets: [
+                    {
+                        label: 'Meta',
+                        data: data.map(d => d.goal),
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Real',
+                        data: data.map(d => d.actual),
+                        backgroundColor: data.map(d => this._fulfillmentColor(d.pct)),
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            afterBody: (items) => {
+                                const d = data[items[0].dataIndex];
+                                return `Cumplimiento: ${d.pct}%`;
+                            }
+                        }
+                    }
+                },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    createLeaderHistoryChart(labels, pcts) {
+        const ctx = document.getElementById('leaderHistoryChart').getContext('2d');
+        if (this.charts.leaderHistory) this.charts.leaderHistory.destroy();
+
+        this.charts.leaderHistory = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: '% Cumplimiento',
+                        data: pcts,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        fill: true, tension: 0.3, pointRadius: 6,
+                        pointBackgroundColor: pcts.map(p =>
+                            p >= 100 ? 'rgba(25,135,84,1)' : p >= 50 ? 'rgba(255,193,7,1)' : 'rgba(220,53,69,1)'
+                        )
+                    },
+                    {
+                        label: 'Meta 100%', data: labels.map(() => 100),
+                        borderColor: 'rgba(25,135,84,0.4)', borderDash: [6,4],
+                        borderWidth: 1, pointRadius: 0, fill: false
+                    },
+                    {
+                        label: 'Mínimo 50%', data: labels.map(() => 50),
+                        borderColor: 'rgba(220,53,69,0.4)', borderDash: [6,4],
+                        borderWidth: 1, pointRadius: 0, fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'top' } },
+                scales: {
+                    y: { beginAtZero: true, max: 110, ticks: { callback: v => v + '%' } }
+                }
+            }
+        });
+    }
+
+    createComparisonChart(labels, pctsA, pctsB, labelA, labelB) {
+        const ctx = document.getElementById('comparisonChart').getContext('2d');
+        if (this.charts.comparison) this.charts.comparison.destroy();
+
+        this.charts.comparison = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: labelA, data: pctsA,
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                        borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1
+                    },
+                    {
+                        label: labelB, data: pctsB,
+                        backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                        borderColor: 'rgba(255, 99, 132, 1)', borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y}%` } }
+                },
+                scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } }
+            }
+        });
+    }
+
     createIndicatorsChart(data) {
         const ctx = document.getElementById('indicatorsChart').getContext('2d');
         
@@ -1526,24 +1619,28 @@ class EducationalTrackingApp {
 
     async init() {
         try {
-            // Verificar si hay datos en localStorage para migrar
+            // Migrar datos de localStorage si existen
             const localStorageData = this.getLocalStorageData();
             if (this.hasDataToMigrate(localStorageData)) {
-                console.log('Migrando datos desde localStorage a SQLite...');
                 try {
                     await this.db.migrateFromLocalStorage(localStorageData);
-                    console.log('Migración completada');
                     this.clearLocalStorage();
                 } catch (error) {
                     console.error('Error en migración:', error);
                 }
             }
-            
-            // Inicializar la aplicación
+
+            // Una sola ronda de 5 llamadas paralelas → llena toda la caché
+            await this.db.refreshCache();
+
             this.showSection('dashboard');
-            await this.updateDashboard();
-            await this.loadTables();
-            this.updateFilters();
+            this.updateFilters(); // sincrónico, usa caché
+
+            // Dashboard y tablas en paralelo usando la caché ya cargada
+            await Promise.all([
+                this.updateDashboard(true),  // skipRefresh=true, caché ya está lista
+                this.loadTables()
+            ]);
         } catch (error) {
             console.error('Error inicializando aplicación:', error);
         }
@@ -1601,7 +1698,14 @@ class EducationalTrackingApp {
         if (sectionId === 'dashboard') {
             this.updateDashboard();
         } else if (sectionId === 'indicators') {
-            this.updateIndicators();
+            this.db.refreshCache().then(() => {
+                this.updateFilters();
+                this.updateIndicators();
+            });
+        } else if (sectionId === 'leaderProfile') {
+            this.db.refreshCache().then(() => this.populateLeaderProfileSelect());
+        } else if (sectionId === 'comparison') {
+            this.db.refreshCache().then(() => this.initComparisonSection());
         }
     }
 
@@ -1642,6 +1746,51 @@ class EducationalTrackingApp {
         }));
     }
 
+    // [{name, pct}] agrupado por municipio
+    calcMunicipalityFulfillment(goals) {
+        const KEYS = ['eeVisitadas','sedesVisitadas','reportesEstanteria','reportesSalud',
+            'analisisVulnerabilidad','matricesRiesgo','diagnosticoSalud','planesCuidado','investigacionesAtel'];
+        const leaders      = this.db.cache.leaders;
+        const municipalities = this.db.cache.municipalities;
+        const map = {};
+        for (const g of goals) {
+            const leader = leaders.find(l => l.id === g.leader_id);
+            if (!leader) continue;
+            const mun = municipalities.find(m => m.id === leader.municipality_id);
+            if (!mun) continue;
+            if (!map[mun.id]) map[mun.id] = { name: mun.name, goal: 0, actual: 0 };
+            for (const k of KEYS) {
+                map[mun.id].goal   += g.goals[k]  || 0;
+                map[mun.id].actual += g.actual[k] || 0;
+            }
+        }
+        return Object.values(map).map(m => ({
+            name: m.name,
+            pct: m.goal > 0 ? Math.min(Math.round(m.actual / m.goal * 100), 100) : 0
+        }));
+    }
+
+    // [{label, pct, goal, actual}] por tipo de actividad
+    calcActivityFulfillment(goals) {
+        const ACTIVITIES = [
+            { key: 'eeVisitadas',            label: 'EE Visitadas' },
+            { key: 'sedesVisitadas',          label: 'Sedes Visitadas' },
+            { key: 'reportesEstanteria',      label: 'Rep. Estándares' },
+            { key: 'reportesSalud',           label: 'Rep. Salud' },
+            { key: 'analisisVulnerabilidad',  label: 'Anál. Vuln.' },
+            { key: 'matricesRiesgo',          label: 'Matrices Riesgo' },
+            { key: 'diagnosticoSalud',        label: 'Diag. Salud' },
+            { key: 'planesCuidado',           label: 'Planes Cuidado' },
+            { key: 'investigacionesAtel',     label: 'Inv. ATEL' }
+        ];
+        return ACTIVITIES.map(a => {
+            const totalGoal   = goals.reduce((s, g) => s + (g.goals[a.key]  || 0), 0);
+            const totalActual = goals.reduce((s, g) => s + (g.actual[a.key] || 0), 0);
+            const pct = totalGoal > 0 ? Math.min(Math.round(totalActual / totalGoal * 100), 100) : 0;
+            return { label: a.label, pct, goal: totalGoal, actual: totalActual };
+        });
+    }
+
     // [{name, fulfillment%}] agrupado por provincia
     calcProvinceFulfillment(goals) {
         const KEYS = ['eeVisitadas','sedesVisitadas','reportesEstanteria','reportesSalud',
@@ -1669,57 +1818,58 @@ class EducationalTrackingApp {
         }));
     }
 
-    async updateDashboard() {
+    async updateDashboard(skipRefresh = false) {
         try {
-            const provinces = await this.db.getProvinces();
-            const municipalities = await this.db.getMunicipalities();
-            const leaders = await this.db.getLeaders();
-            const institutions = await this.db.getInstitutions();
+            // Refrescar caché en paralelo (5 llamadas simultáneas → mucho más rápido)
+            if (!skipRefresh) await this.db.refreshCache();
+
+            const { provinces, municipalities, leaders, institutions } = this.db.cache;
 
             // Actualizar contadores
-            document.getElementById('totalProvinces').textContent = provinces.length;
+            document.getElementById('totalProvinces').textContent     = provinces.length;
             document.getElementById('totalMunicipalities').textContent = municipalities.length;
-            document.getElementById('totalLeaders').textContent = leaders.length;
-            document.getElementById('totalInstitutions').textContent = institutions.length;
+            document.getElementById('totalLeaders').textContent        = leaders.length;
+            document.getElementById('totalInstitutions').textContent   = institutions.length;
 
             // Poblar filtro de líderes del dashboard
             const dashLeaderSelect = document.getElementById('dashFilterLeader');
             dashLeaderSelect.innerHTML = '<option value="">Todos los líderes</option>' +
                 leaders.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
 
-            // Cargar tabla + gráficas de cumplimiento
-            await this.loadDashboardWeeklyGoalsTable();
+            // Cargar tabla + gráficas (usa caché, sin llamadas extra)
+            this.loadDashboardWeeklyGoalsTable();
         } catch (error) {
             console.error('Error actualizando dashboard:', error);
         }
     }
 
-    async loadDashboardWeeklyGoalsTable() {
+    loadDashboardWeeklyGoalsTable() {
         try {
-            const leaders = this.db.cache.leaders;
             const leaderFilter = document.getElementById('dashFilterLeader').value;
-            const startStr = document.getElementById('dashDateStart').value;
-            const endStr   = document.getElementById('dashDateEnd').value;
+            const startStr     = document.getElementById('dashDateStart').value;
+            const endStr       = document.getElementById('dashDateEnd').value;
 
-            let allGoals = [];
-            for (const leader of leaders) {
-                const leaderGoals = await this.db.getLeaderWeeklyGoals(leader.id);
-                allGoals.push(...leaderGoals.map(goal => ({
-                    ...goal,
-                    leaderName: leader.name,
-                    leaderId: leader.id
-                })));
-            }
+            // Una sola lectura desde caché (sin llamadas API)
+            let allGoals = this.db.cache.weeklyGoals.map(g => ({
+                ...g,
+                leaderName: g.leader_name || `Líder ${g.leader_id}`,
+                leaderId: g.leader_id
+            }));
 
             if (leaderFilter) allGoals = allGoals.filter(g => g.leader_id == leaderFilter);
             allGoals = allGoals.filter(g => this.isGoalInDateRange(g, startStr, endStr));
 
-            // Actualizar gráficas de cumplimiento
+            // Alertas (sobre TODOS los datos, sin filtro de fecha)
+            this.renderDashboardAlerts(this.db.cache.weeklyGoals);
+
+            // 4 gráficas de cumplimiento (sobre datos filtrados)
             this.chartManager.createLeaderFulfillmentChart(this.calcLeaderFulfillment(allGoals));
             this.chartManager.createProvinceFulfillmentChart(this.calcProvinceFulfillment(allGoals));
+            this.chartManager.createMunicipalityFulfillmentChart(this.calcMunicipalityFulfillment(allGoals));
+            this.chartManager.createActivityFulfillmentChart(this.calcActivityFulfillment(allGoals));
 
             allGoals.sort((a, b) => {
-                if (b.year !== a.year) return b.year - a.year;
+                if (b.year  !== a.year)  return b.year  - a.year;
                 if (b.month !== a.month) return b.month - a.month;
                 return b.week - a.week;
             });
@@ -1735,7 +1885,7 @@ class EducationalTrackingApp {
 
             const tbody = document.getElementById('dashWeeklyGoalsTableBody');
             if (allGoals.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted">No hay metas semanales registradas</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">No hay metas semanales registradas</td></tr>';
                 return;
             }
 
@@ -1776,14 +1926,8 @@ class EducationalTrackingApp {
 
     async loadProvincesTable() {
         try {
-            const provinces = await this.db.getProvinces();
-            const municipalities = await this.db.getMunicipalities();
-            
-            console.log('loadProvincesTable - provinces:', provinces);
-            console.log('loadProvincesTable - municipalities:', municipalities);
-            console.log('loadProvincesTable - ¿provinces es array?', Array.isArray(provinces));
-            console.log('loadProvincesTable - ¿municipalities es array?', Array.isArray(municipalities));
-            
+            const provinces      = this.db.cache.provinces;
+            const municipalities = this.db.cache.municipalities;
             const tbody = document.getElementById('provincesTableBody');
             
             tbody.innerHTML = provinces.map(province => {
@@ -1812,16 +1956,10 @@ class EducationalTrackingApp {
 
     async loadMunicipalitiesTable() {
         try {
-            const municipalities = await this.db.getMunicipalities();
-            const provinces = await this.db.getProvinces();
-            const leaders = await this.db.getLeaders();
-            const institutions = await this.db.getInstitutions();
-            
-            console.log('loadMunicipalitiesTable - municipalities:', municipalities);
-            console.log('loadMunicipalitiesTable - provinces:', provinces);
-            console.log('loadMunicipalitiesTable - ¿municipalities es array?', Array.isArray(municipalities));
-            console.log('loadMunicipalitiesTable - ¿provinces es array?', Array.isArray(provinces));
-            
+            const municipalities = this.db.cache.municipalities;
+            const provinces      = this.db.cache.provinces;
+            const leaders        = this.db.cache.leaders;
+            const institutions   = this.db.cache.institutions;
             const tbody = document.getElementById('municipalitiesTableBody');
             
             tbody.innerHTML = municipalities.map(municipality => {
@@ -1854,9 +1992,9 @@ class EducationalTrackingApp {
 
     async loadLeadersTable() {
         try {
-            const leaders = await this.db.getLeaders();
-            const municipalities = await this.db.getMunicipalities();
-            const institutions = await this.db.getInstitutions();
+            const leaders        = this.db.cache.leaders;
+            const municipalities = this.db.cache.municipalities;
+            const institutions   = this.db.cache.institutions;
             const tbody = document.getElementById('leadersTableBody');
             
             tbody.innerHTML = leaders.map(leader => {
@@ -1888,8 +2026,8 @@ class EducationalTrackingApp {
 
     async loadInstitutionsTable() {
         try {
-            const institutions = await this.db.getInstitutions();
-            const leaders = await this.db.getLeaders();
+            const institutions = this.db.cache.institutions;
+            const leaders      = this.db.cache.leaders;
             const tbody = document.getElementById('institutionsTableBody');
             
             tbody.innerHTML = institutions.map(institution => {
@@ -1922,22 +2060,17 @@ class EducationalTrackingApp {
 
     async loadWeeklyGoalsTable() {
         try {
-            const leaders = await this.db.getLeaders();
             const tbody = document.getElementById('weeklyGoalsTableBody');
-            const startStr    = document.getElementById('indDateStart').value;
-            const endStr      = document.getElementById('indDateEnd').value;
+            const startStr     = document.getElementById('indDateStart').value;
+            const endStr       = document.getElementById('indDateEnd').value;
             const leaderFilter = document.getElementById('filterLeader').value;
 
-            let allGoals = [];
-
-            for (const leader of leaders) {
-                const leaderGoals = await this.db.getLeaderWeeklyGoals(leader.id);
-                allGoals.push(...leaderGoals.map(goal => ({
-                    ...goal,
-                    leaderName: leader.name,
-                    leaderId: leader.id
-                })));
-            }
+            // Lectura desde caché — sin llamadas API extra
+            let allGoals = this.db.cache.weeklyGoals.map(g => ({
+                ...g,
+                leaderName: g.leader_name || `Líder ${g.leader_id}`,
+                leaderId: g.leader_id
+            }));
 
             if (leaderFilter) allGoals = allGoals.filter(g => g.leader_id == leaderFilter);
             allGoals = allGoals.filter(g => this.isGoalInDateRange(g, startStr, endStr));
@@ -2053,6 +2186,304 @@ class EducationalTrackingApp {
             ).join('');
     }
 
+    // ── Alertas de bajo cumplimiento ─────────────────────────────────────────
+
+    checkLowComplianceAlerts(goals) {
+        const KEYS = ['eeVisitadas','sedesVisitadas','reportesEstanteria','reportesSalud',
+            'analisisVulnerabilidad','matricesRiesgo','diagnosticoSalud','planesCuidado','investigacionesAtel'];
+        const getPct = g => {
+            const tg = KEYS.reduce((s, k) => s + (g.goals[k]  || 0), 0);
+            const ta = KEYS.reduce((s, k) => s + (g.actual[k] || 0), 0);
+            return tg > 0 ? Math.round(ta / tg * 100) : 0;
+        };
+        const byLeader = {};
+        for (const g of goals) {
+            if (!byLeader[g.leader_id]) byLeader[g.leader_id] = [];
+            byLeader[g.leader_id].push(g);
+        }
+        const alerts = [];
+        for (const [lid, lg] of Object.entries(byLeader)) {
+            lg.sort((a, b) => b.year !== a.year ? b.year - a.year :
+                               b.month !== a.month ? b.month - a.month : b.week - a.week);
+            if (lg.length < 2) continue;
+            const lastPct = getPct(lg[0]);
+            const prevPct = getPct(lg[1]);
+            if (lastPct < 50 && prevPct < 50) {
+                alerts.push({
+                    leaderName: lg[0].leader_name || `Líder ${lid}`,
+                    lastPct, prevPct,
+                    lastWeek: `${weekToStartDate(lg[0].week, lg[0].month, lg[0].year)}`
+                });
+            }
+        }
+        return alerts;
+    }
+
+    renderDashboardAlerts(goals) {
+        const alerts = this.checkLowComplianceAlerts(goals);
+        const card   = document.getElementById('dashAlertsCard');
+        const body   = document.getElementById('dashAlertsBody');
+        if (!card) return;
+        if (alerts.length === 0) { card.style.display = 'none'; return; }
+        body.innerHTML = alerts.map(a => `
+            <div class="d-flex align-items-center gap-2 me-3 mb-2">
+                <span class="badge bg-danger p-2 fs-6">
+                    <i class="bi bi-person-fill me-1"></i>${a.leaderName}
+                </span>
+                <small class="text-danger fw-bold">${a.prevPct}% → ${a.lastPct}%</small>
+            </div>
+        `).join('');
+        card.style.display = 'block';
+    }
+
+    // ── Perfil del Líder ──────────────────────────────────────────────────────
+
+    populateLeaderProfileSelect() {
+        const leaders = this.db.cache.leaders;
+        const select  = document.getElementById('profileLeaderSelect');
+        if (!select) return;
+        select.innerHTML = '<option value="">-- Seleccione un líder --</option>' +
+            leaders.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+    }
+
+    loadLeaderProfileData(leaderId) {
+        const id     = parseInt(leaderId);
+        const leader = this.db.cache.leaders.find(l => l.id === id);
+        if (!leader) return;
+
+        const mun          = this.db.cache.municipalities.find(m => m.id === leader.municipality_id);
+        const institutions = this.db.cache.institutions.filter(i => i.leader_id === id);
+        const allGoals     = this.db.cache.weeklyGoals.filter(g => g.leader_id === id)
+            .sort((a, b) => a.year !== b.year ? a.year - b.year :
+                             a.month !== b.month ? a.month - b.month : a.week - b.week);
+
+        const KEYS = ['eeVisitadas','sedesVisitadas','reportesEstanteria','reportesSalud',
+            'analisisVulnerabilidad','matricesRiesgo','diagnosticoSalud','planesCuidado','investigacionesAtel'];
+        const getPct = g => {
+            const tg = KEYS.reduce((s, k) => s + (g.goals[k]  || 0), 0);
+            const ta = KEYS.reduce((s, k) => s + (g.actual[k] || 0), 0);
+            return tg > 0 ? Math.round(ta / tg * 100) : 0;
+        };
+
+        // Info básica
+        document.getElementById('profileLeaderName').textContent        = leader.name;
+        document.getElementById('profileLeaderContact').textContent     = `📞 ${leader.contact}`;
+        document.getElementById('profileLeaderMunicipality').textContent = `📍 ${mun ? mun.name : 'N/A'}`;
+
+        // ── Instituciones con cumplimiento proporcional ──────────────────────
+        const instBody = document.getElementById('profileInstitutionsBody');
+        if (institutions.length === 0) {
+            instBody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">Sin instituciones asignadas</td></tr>';
+        } else {
+            // Totales de sedes del líder (para calcular participación)
+            const totalLeaderSedes = institutions.reduce((s, i) => s + i.urban_sedes + i.rural_sedes, 0);
+
+            // Acumulado de sedes meta y real a través de todas las semanas
+            const totalGoalSedes   = allGoals.reduce((s, g) => s + (g.goals.sedesVisitadas  || 0), 0);
+            const totalActualSedes = allGoals.reduce((s, g) => s + (g.actual.sedesVisitadas || 0), 0);
+
+            // Últimas 5 semanas para los mini-badges de historial
+            const lastWeeks = allGoals.slice(-5);
+
+            instBody.innerHTML = institutions.map(i => {
+                const totalSedes   = i.urban_sedes + i.rural_sedes;
+                const sharePct     = totalLeaderSedes > 0 ? totalSedes / totalLeaderSedes : 0;
+                const instGoal     = totalLeaderSedes > 0 ? Math.round(totalGoalSedes   * sharePct) : 0;
+                const instActual   = totalLeaderSedes > 0 ? Math.round(totalActualSedes * sharePct) : 0;
+                const pct          = instGoal > 0 ? Math.min(100, Math.round(instActual / instGoal * 100)) : (allGoals.length > 0 ? 0 : null);
+                const badgeColor   = pct === null ? 'secondary' : pct >= 100 ? 'success' : pct >= 50 ? 'warning' : 'danger';
+                const pctLabel     = pct === null ? 'Sin datos' : `${pct}%`;
+                const shareLabel   = totalLeaderSedes > 0 ? `${Math.round(sharePct * 100)}%` : '—';
+
+                // Mini-badges de las últimas semanas (punto de color)
+                const weekDots = lastWeeks.length === 0
+                    ? '<span class="text-muted small">—</span>'
+                    : lastWeeks.map(g => {
+                        const gSedes = g.goals.sedesVisitadas || 0;
+                        const aSedes = g.actual.sedesVisitadas || 0;
+                        const wShare = totalLeaderSedes > 0 ? Math.round(aSedes * sharePct) : 0;
+                        const wGoal  = totalLeaderSedes > 0 ? Math.round(gSedes * sharePct) : 0;
+                        const wPct   = wGoal > 0 ? Math.min(100, Math.round(wShare / wGoal * 100)) : 0;
+                        const wColor = wPct >= 100 ? '#198754' : wPct >= 50 ? '#ffc107' : '#dc3545';
+                        return `<span title="Sem. ${g.week} – ${wPct}%" style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${wColor};margin:1px;" ></span>`;
+                    }).join('');
+
+                return `<tr>
+                    <td class="fw-semibold">${i.name}</td>
+                    <td class="text-center">${i.urban_sedes}</td>
+                    <td class="text-center">${i.rural_sedes}</td>
+                    <td class="text-center fw-bold">${totalSedes}</td>
+                    <td class="text-center">${i.teacher_count}</td>
+                    <td class="text-center">
+                        <div class="progress" style="height:18px;min-width:70px;">
+                            <div class="progress-bar bg-info" style="width:${Math.round(sharePct*100)}%">
+                                <small>${shareLabel}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center">${instGoal}</td>
+                    <td class="text-center">${instActual}</td>
+                    <td class="text-center"><span class="badge bg-${badgeColor} fs-6">${pctLabel}</span></td>
+                    <td class="text-center">${weekDots}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Totales acumulados
+        const tg = KEYS.reduce((acc, k) => { acc[k] = allGoals.reduce((s, g) => s + (g.goals[k]  || 0), 0); return acc; }, {});
+        const ta = KEYS.reduce((acc, k) => { acc[k] = allGoals.reduce((s, g) => s + (g.actual[k] || 0), 0); return acc; }, {});
+        const sumGoal   = KEYS.reduce((s, k) => s + tg[k], 0);
+        const sumActual = KEYS.reduce((s, k) => s + ta[k], 0);
+        const overall   = sumGoal > 0 ? Math.round(sumActual / sumGoal * 100) : 0;
+        const pctColor  = overall >= 100 ? 'success' : overall >= 50 ? 'warning' : 'danger';
+
+        document.getElementById('profileSummaryCards').innerHTML = `
+            <div class="col-md-4 mb-2">
+                <div class="card text-center h-100">
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <h2 class="display-5 text-${pctColor} fw-bold">${overall}%</h2>
+                        <p class="text-muted mb-0">Cumplimiento acumulado</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-2">
+                <div class="card text-center h-100">
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <h2 class="display-5 fw-bold">${allGoals.length}</h2>
+                        <p class="text-muted mb-0">Semanas registradas</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-2">
+                <div class="card text-center h-100">
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <h2 class="display-5 fw-bold">${institutions.length}</h2>
+                        <p class="text-muted mb-0">Instituciones asignadas</p>
+                    </div>
+                </div>
+            </div>`;
+
+        // Gráfica histórica
+        const labels = allGoals.map(g => weekToStartDate(g.week, g.month, g.year));
+        const pcts   = allGoals.map(g => getPct(g));
+        this.chartManager.createLeaderHistoryChart(labels, pcts);
+
+        // Tabla detallada acumulado
+        const tbody = document.getElementById('profileAccumBody');
+        const LABELS = ['EE Visitadas','Sedes Visitadas','Rep. de Estándares','Rep. Salud',
+                        'Anál. Vulnerabilidad','Matrices Riesgo','Diag. Salud','Planes Cuidado','Inv. ATEL'];
+        tbody.innerHTML = KEYS.map((k, i) => {
+            const p = tg[k] > 0 ? Math.round(ta[k] / tg[k] * 100) : 0;
+            const color = p >= 100 ? 'success' : p >= 50 ? 'warning' : 'danger';
+            return `<tr>
+                <td>${LABELS[i]}</td>
+                <td class="text-center">${tg[k]}</td>
+                <td class="text-center">${ta[k]}</td>
+                <td class="text-center"><span class="badge bg-${color}">${p}%</span></td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('profileContent').style.display = 'block';
+    }
+
+    // ── Comparación entre periodos ────────────────────────────────────────────
+
+    initComparisonSection() {
+        // Poblar select de líderes
+        const leaders = this.db.cache.leaders;
+        const sel = document.getElementById('compLeaderFilter');
+        if (sel) {
+            sel.innerHTML = '<option value="">Todos los líderes</option>' +
+                leaders.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+        }
+        // Fechas por defecto: Periodo A = semana anterior (jue-mié), Periodo B = semana actual
+        const currThu = getWeekStartThursday(new Date());
+        const prevThu = new Date(currThu); prevThu.setDate(prevThu.getDate() - 7);
+
+        document.getElementById('compAStart').value = fmtDate(prevThu);
+        document.getElementById('compAEnd').value   = fmtDate(getWeekEndWednesday(prevThu));
+        document.getElementById('compBStart').value = fmtDate(currThu);
+        document.getElementById('compBEnd').value   = fmtDate(getWeekEndWednesday(currThu));
+    }
+
+    loadComparisonData() {
+        const aStart = document.getElementById('compAStart').value;
+        const aEnd   = document.getElementById('compAEnd').value;
+        const bStart = document.getElementById('compBStart').value;
+        const bEnd   = document.getElementById('compBEnd').value;
+        const leaderF = document.getElementById('compLeaderFilter').value;
+
+        if (!aStart || !aEnd || !bStart || !bEnd) {
+            alert('Complete las fechas de ambos periodos'); return;
+        }
+
+        let goals = this.db.cache.weeklyGoals;
+        if (leaderF) goals = goals.filter(g => g.leader_id == leaderF);
+
+        const goalsA = goals.filter(g => this.isGoalInDateRange(g, aStart, aEnd));
+        const goalsB = goals.filter(g => this.isGoalInDateRange(g, bStart, bEnd));
+
+        const ACTIVITIES = [
+            { key: 'eeVisitadas',           label: 'EE Visitadas' },
+            { key: 'sedesVisitadas',         label: 'Sedes Visit.' },
+            { key: 'reportesEstanteria',     label: 'Rep. Estánd.' },
+            { key: 'reportesSalud',          label: 'Rep. Salud' },
+            { key: 'analisisVulnerabilidad', label: 'Anál. Vuln.' },
+            { key: 'matricesRiesgo',         label: 'Matrices' },
+            { key: 'diagnosticoSalud',       label: 'Diag. Salud' },
+            { key: 'planesCuidado',          label: 'Planes' },
+            { key: 'investigacionesAtel',    label: 'Inv. ATEL' }
+        ];
+
+        const sumF = (gs, key, type) => gs.reduce((s, g) => s + (g[type][key] || 0), 0);
+        const pctF = (gs, key) => {
+            const g = sumF(gs, key, 'goals'), a = sumF(gs, key, 'actual');
+            return g > 0 ? Math.round(a / g * 100) : 0;
+        };
+
+        const pctsA = ACTIVITIES.map(a => pctF(goalsA, a.key));
+        const pctsB = ACTIVITIES.map(a => pctF(goalsB, a.key));
+
+        const labelA = `${aStart} → ${aEnd}`;
+        const labelB = `${bStart} → ${bEnd}`;
+        this.chartManager.createComparisonChart(ACTIVITIES.map(a => a.label), pctsA, pctsB, labelA, labelB);
+
+        // Tabla comparativa
+        const thead = document.querySelector('#comparisonTable thead');
+        const tbody = document.querySelector('#comparisonTable tbody');
+        thead.innerHTML = `
+            <tr>
+                <th>Indicador</th>
+                <th colspan="3" class="text-center table-primary">Periodo A (${aStart} → ${aEnd})</th>
+                <th colspan="3" class="text-center table-danger">Periodo B (${bStart} → ${bEnd})</th>
+                <th class="text-center">Δ</th>
+            </tr>
+            <tr>
+                <th></th>
+                <th>Meta</th><th>Real</th><th>%</th>
+                <th>Meta</th><th>Real</th><th>%</th>
+                <th></th>
+            </tr>`;
+
+        const bdg = p => `<span class="badge bg-${p >= 100 ? 'success' : p >= 50 ? 'warning' : 'danger'}">${p}%</span>`;
+        tbody.innerHTML = ACTIVITIES.map((a, i) => {
+            const gA = sumF(goalsA, a.key, 'goals'), aA = sumF(goalsA, a.key, 'actual');
+            const gB = sumF(goalsB, a.key, 'goals'), aB = sumF(goalsB, a.key, 'actual');
+            const pA = pctsA[i], pB = pctsB[i];
+            const d  = pB - pA;
+            return `<tr>
+                <td><strong>${a.label}</strong></td>
+                <td>${gA}</td><td>${aA}</td><td>${bdg(pA)}</td>
+                <td>${gB}</td><td>${aB}</td><td>${bdg(pB)}</td>
+                <td class="${d > 0 ? 'text-success' : d < 0 ? 'text-danger' : ''} fw-bold">
+                    ${d > 0 ? '+' : ''}${d}%
+                </td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('compResultSection').style.display = 'block';
+    }
+
     async updateIndicators() {
         const provinceId = document.getElementById('filterProvince').value;
         const municipalityId = document.getElementById('filterMunicipality').value;
@@ -2067,13 +2498,107 @@ class EducationalTrackingApp {
 
         const indicators = this.calculator.calculateIndicators(filter);
 
-        // Actualizar tabla de metas semanales (aplica filtros de fecha)
+        // Actualizar tabla de metas semanales (filtra desde caché)
         this.loadWeeklyGoalsTable();
 
         // Actualizar gráfico radar
         this.chartManager.createIndicatorsChart(indicators);
 
     }
+}
+
+// ── Exportación ───────────────────────────────────────────────────────────────
+
+function exportWeeklyGoalsExcel() {
+    if (typeof XLSX === 'undefined') { alert('Librería Excel no disponible. Verifique conexión a internet.'); return; }
+    const goals = app.db.cache.weeklyGoals;
+    if (!goals.length) { alert('No hay datos para exportar.'); return; }
+
+    const rows = goals.map(g => ({
+        'Líder':                    g.leader_name || '',
+        'Fecha Inicio':             weekToStartDate(g.week, g.month, g.year),
+        'Fecha Fin':                weekToEndDate(g.week, g.month, g.year),
+        'EE Visitadas Meta':        g.goals.eeVisitadas,
+        'EE Visitadas Real':        g.actual.eeVisitadas,
+        'Sedes Visitadas Meta':     g.goals.sedesVisitadas,
+        'Sedes Visitadas Real':     g.actual.sedesVisitadas,
+        'Rep. Estándares Meta':     g.goals.reportesEstanteria,
+        'Rep. Estándares Real':     g.actual.reportesEstanteria,
+        'Rep. Salud Meta':          g.goals.reportesSalud,
+        'Rep. Salud Real':          g.actual.reportesSalud,
+        'Anál. Vuln. Meta':         g.goals.analisisVulnerabilidad,
+        'Anál. Vuln. Real':         g.actual.analisisVulnerabilidad,
+        'Matrices Riesgo Meta':     g.goals.matricesRiesgo,
+        'Matrices Riesgo Real':     g.actual.matricesRiesgo,
+        'Diag. Salud Meta':         g.goals.diagnosticoSalud,
+        'Diag. Salud Real':         g.actual.diagnosticoSalud,
+        'Planes Cuidado Meta':      g.goals.planesCuidado,
+        'Planes Cuidado Real':      g.actual.planesCuidado,
+        'Inv. ATEL Meta':           g.goals.investigacionesAtel,
+        'Inv. ATEL Real':           g.actual.investigacionesAtel,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length + 2, 10) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Metas Semanales');
+    XLSX.writeFile(wb, `metas_semanales_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function exportWeeklyGoalsPDF() {
+    if (typeof window.jspdf === 'undefined') { alert('Librería PDF no disponible. Verifique conexión a internet.'); return; }
+    const goals = app.db.cache.weeklyGoals;
+    if (!goals.length) { alert('No hay datos para exportar.'); return; }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const KEYS = ['eeVisitadas','sedesVisitadas','reportesEstanteria','reportesSalud',
+                  'analisisVulnerabilidad','matricesRiesgo','diagnosticoSalud','planesCuidado','investigacionesAtel'];
+
+    doc.setFontSize(13); doc.setTextColor(13, 110, 253);
+    doc.text('Sistema de Seguimiento Educativo - Cundinamarca', 14, 14);
+    doc.setFontSize(9); doc.setTextColor(100);
+    doc.text(`Reporte de Metas Semanales — Generado: ${new Date().toLocaleDateString('es-CO')}`, 14, 21);
+
+    const pct = (a, g) => (g > 0 ? Math.round(a / g * 100) : 0) + '%';
+
+    doc.autoTable({
+        startY: 27,
+        head: [['Líder','F.Inicio','F.Fin','EE Vis.','Sedes','Estánd.','Salud','Vuln.','Matrices','Diag.','Planes','ATEL','Total']],
+        body: goals.map(g => {
+            const sumG = KEYS.reduce((s,k) => s + (g.goals[k]  || 0), 0);
+            const sumA = KEYS.reduce((s,k) => s + (g.actual[k] || 0), 0);
+            return [
+                g.leader_name || '',
+                weekToStartDate(g.week, g.month, g.year),
+                weekToEndDate(g.week, g.month, g.year),
+                pct(g.actual.eeVisitadas,           g.goals.eeVisitadas),
+                pct(g.actual.sedesVisitadas,         g.goals.sedesVisitadas),
+                pct(g.actual.reportesEstanteria,     g.goals.reportesEstanteria),
+                pct(g.actual.reportesSalud,          g.goals.reportesSalud),
+                pct(g.actual.analisisVulnerabilidad, g.goals.analisisVulnerabilidad),
+                pct(g.actual.matricesRiesgo,         g.goals.matricesRiesgo),
+                pct(g.actual.diagnosticoSalud,       g.goals.diagnosticoSalud),
+                pct(g.actual.planesCuidado,          g.goals.planesCuidado),
+                pct(g.actual.investigacionesAtel,    g.goals.investigacionesAtel),
+                pct(sumA, sumG)
+            ];
+        }),
+        styles: { fontSize: 6.5, cellPadding: 1.2 },
+        headStyles: { fillColor: [13, 110, 253], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 249, 250] },
+        didParseCell(data) {
+            if (data.section === 'body' && data.column.index >= 3) {
+                const v = parseInt(data.cell.raw);
+                if (!isNaN(v)) {
+                    data.cell.styles.textColor = v >= 100 ? [25,135,84] : v >= 50 ? [133,100,4] : [220,53,69];
+                    data.cell.styles.fontStyle = 'bold';
+                }
+            }
+        }
+    });
+
+    doc.save(`metas_semanales_${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
 // Hacer funciones disponibles globalmente
@@ -2107,8 +2632,18 @@ window.editLeader = editLeader;
 window.deleteLeader = deleteLeader;
 window.editInstitution = editInstitution;
 window.deleteInstitution = deleteInstitution;
-window.editWeeklyGoal = editWeeklyGoal;
-window.deleteWeeklyGoal = deleteWeeklyGoal;
+window.editWeeklyGoal    = editWeeklyGoal;
+window.deleteWeeklyGoal  = deleteWeeklyGoal;
+
+window.loadLeaderProfile = function() {
+    const leaderId = document.getElementById('profileLeaderSelect').value;
+    if (!leaderId) { document.getElementById('profileContent').style.display = 'none'; return; }
+    if (app) app.loadLeaderProfileData(parseInt(leaderId));
+};
+
+window.loadComparison          = function() { if (app) app.loadComparisonData(); };
+window.exportWeeklyGoalsExcel  = exportWeeklyGoalsExcel;
+window.exportWeeklyGoalsPDF    = exportWeeklyGoalsPDF;
 
 // Inicializar la aplicación
 document.addEventListener('DOMContentLoaded', function() {

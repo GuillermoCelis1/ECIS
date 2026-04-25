@@ -35,6 +35,12 @@
                 <a class="nav-link" href="#" onclick="showSection('indicators')">
                     <i class="bi bi-graph-up"></i> Indicadores
                 </a>
+                <a class="nav-link" href="#" onclick="showSection('leaderProfile')">
+                    <i class="bi bi-person-lines-fill"></i> Perfil Líder
+                </a>
+                <a class="nav-link" href="#" onclick="showSection('comparison')">
+                    <i class="bi bi-bar-chart-steps"></i> Comparación
+                </a>
             </div>
         </div>
     </nav>
@@ -78,6 +84,16 @@
                 </div>
             </div>
 
+            <!-- Alertas de bajo cumplimiento -->
+            <div id="dashAlertsCard" class="row mt-3" style="display:none;">
+                <div class="col-12">
+                    <div class="alert alert-danger mb-0 py-2" role="alert">
+                        <strong><i class="bi bi-exclamation-triangle-fill me-2"></i>Alertas — 2 semanas consecutivas por debajo del 50%:</strong>
+                        <div id="dashAlertsBody" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="row mt-4">
                 <div class="col-md-6">
                     <div class="card">
@@ -96,6 +112,29 @@
                         </div>
                         <div class="card-body">
                             <canvas id="provinceFulfillmentChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Cumplimiento por Municipio</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="municipalityFulfillmentChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Cumplimiento por Actividad</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="activityFulfillmentChart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -293,11 +332,19 @@
             <div class="row mb-4">
                 <div class="col-md-12">
                     <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5>Gestión de Metas Semanales por Líder</h5>
-                            <button class="btn btn-primary" onclick="showWeeklyGoalModal()">
-                                <i class="bi bi-plus-circle"></i> Nueva Meta Semanal
-                            </button>
+                        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h5 class="mb-0">Gestión de Metas Semanales por Líder</h5>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-success btn-sm" onclick="exportWeeklyGoalsExcel()">
+                                    <i class="bi bi-file-earmark-excel"></i> Excel
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="exportWeeklyGoalsPDF()">
+                                    <i class="bi bi-file-earmark-pdf"></i> PDF
+                                </button>
+                                <button class="btn btn-primary btn-sm" onclick="showWeeklyGoalModal()">
+                                    <i class="bi bi-plus-circle"></i> Nueva Meta
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="table-responsive">
@@ -342,6 +389,173 @@
             </div>
 
         </div>
+        <!-- Leader Profile Section -->
+        <div id="leaderProfile" class="content-section" style="display:none;">
+            <h2 class="mb-4"><i class="bi bi-person-lines-fill me-2"></i>Perfil del Líder</h2>
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Seleccionar Líder:</label>
+                    <select class="form-select" id="profileLeaderSelect" onchange="loadLeaderProfile()">
+                        <option value="">-- Seleccione un líder --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="profileContent" style="display:none;">
+                <!-- Info + resumen -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0"><i class="bi bi-person-circle me-2"></i><span id="profileLeaderName"></span></h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-1" id="profileLeaderContact"></p>
+                                <p class="mb-0" id="profileLeaderMunicipality"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="row" id="profileSummaryCards"></div>
+                    </div>
+                </div>
+
+                <!-- Gráfica histórica -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header"><h5 class="mb-0">Evolución histórica de cumplimiento (semana a semana)</h5></div>
+                            <div class="card-body"><canvas id="leaderHistoryChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Acumulado por indicador -->
+                <div class="row mb-3">
+                    <div class="col-md-5">
+                        <div class="card">
+                            <div class="card-header"><h5 class="mb-0">Acumulado por indicador</h5></div>
+                            <div class="card-body">
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead class="table-primary">
+                                        <tr><th>Indicador</th><th class="text-center">Meta</th><th class="text-center">Real</th><th class="text-center">%</th></tr>
+                                    </thead>
+                                    <tbody id="profileAccumBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Instituciones con cumplimiento -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0"><i class="bi bi-building me-2"></i>Instituciones asignadas – cumplimiento por institución</h5>
+                                <small class="text-muted">Sedes distribuidas proporcionalmente respecto al total del líder.</small>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered table-hover mb-0">
+                                        <thead class="table-secondary">
+                                            <tr>
+                                                <th>Institución</th>
+                                                <th class="text-center">Sedes Urb.</th>
+                                                <th class="text-center">Sedes Rur.</th>
+                                                <th class="text-center">Total Sedes</th>
+                                                <th class="text-center">Docentes</th>
+                                                <th class="text-center">Participación</th>
+                                                <th class="text-center">Sedes Meta (acum.)</th>
+                                                <th class="text-center">Sedes Real (acum.)</th>
+                                                <th class="text-center">Cumplimiento</th>
+                                                <th class="text-center">Últimas semanas</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="profileInstitutionsBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comparison Section -->
+        <div id="comparison" class="content-section" style="display:none;">
+            <h2 class="mb-4"><i class="bi bi-bar-chart-steps me-2"></i>Comparación entre Periodos</h2>
+            <p class="text-muted">Las semanas van de <strong>jueves a miércoles</strong>. Los rangos se pre-cargan con la semana anterior (A) y la actual (B).</p>
+
+            <div class="row mb-3">
+                <div class="col-md-5">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white py-2"><strong>Periodo A</strong></div>
+                        <div class="card-body row g-2">
+                            <div class="col-6">
+                                <label class="form-label small">Desde</label>
+                                <input type="date" id="compAStart" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Hasta</label>
+                                <input type="date" id="compAEnd" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <div class="card border-danger">
+                        <div class="card-header bg-danger text-white py-2"><strong>Periodo B</strong></div>
+                        <div class="card-body row g-2">
+                            <div class="col-6">
+                                <label class="form-label small">Desde</label>
+                                <input type="date" id="compBStart" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Hasta</label>
+                                <input type="date" id="compBEnd" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2 d-flex flex-column justify-content-end">
+                    <label class="form-label small">Filtrar líder</label>
+                    <select class="form-select form-select-sm mb-2" id="compLeaderFilter">
+                        <option value="">Todos</option>
+                    </select>
+                    <button class="btn btn-primary btn-sm w-100" onclick="loadComparison()">
+                        <i class="bi bi-arrow-repeat me-1"></i>Comparar
+                    </button>
+                </div>
+            </div>
+
+            <div id="compResultSection" style="display:none;">
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header"><h5 class="mb-0">% Cumplimiento por indicador — Periodo A vs B</h5></div>
+                            <div class="card-body"><canvas id="comparisonChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header"><h5 class="mb-0">Tabla comparativa detallada</h5></div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-sm" id="comparisonTable">
+                                        <thead></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Modal for Province -->
@@ -615,6 +829,9 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
