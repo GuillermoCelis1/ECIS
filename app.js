@@ -21,7 +21,7 @@ function weekToEndDate(week, month, year) {
 
 // Clase para manejar la comunicación con la API REST
 class APIManager {
-    constructor(baseURL = 'https://ecis.onrender.com') {
+    constructor(baseURL = 'https://ecis.onrender.com/api') {
         this.baseURL = baseURL;
     }
 
