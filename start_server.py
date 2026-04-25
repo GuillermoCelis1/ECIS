@@ -53,7 +53,14 @@ def main():
     is_production = os.environ.get('FLASK_ENV') == 'production'
     
     if is_render or is_production:
-        show_deployment_info()
+        print("🚀 Modo Producción Detectado")
+        print("   Iniciando servidor con Gunicorn...")
+        # En producción, este script no debería ejecutarse, pero si lo hace,
+        # iniciamos la aplicación Flask directamente
+        from app import app
+        port = int(os.environ.get('PORT', 5000))
+        print(f"   Puerto: {port}")
+        app.run(host='0.0.0.0', port=port, debug=False)
         return
     
     if not check_dependencies():
